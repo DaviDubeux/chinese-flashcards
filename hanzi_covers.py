@@ -28,7 +28,7 @@ TRANSLATION_PROP = "Tradução"  # text property for the Portuguese translation
 HSK_PROP = "HSK"         # select (or text/number) property, filled as e.g. "HSK-1"
 HSK_VERSION = "o"        # "o" = HSK 2.0 (levels 1-6), "n" = HSK 3.0 (levels 1-7)
 FILL_ONLY_EMPTY = True   # never overwrite Pinyin/Tradução/HSK you already typed
-TRANSLATE_TO = "pt-BR"
+TRANSLATE_TO = "pt-BR"     # Portuguese (Brazil); Tradução stays empty if no translation is found
 WIDTH, HEIGHT = 1500, 600  # Notion's cover size (shown center-cropped)
 BG, FG, SUB = "#FBF7EF", "#B22222", "#555555"
 
@@ -97,14 +97,31 @@ def main_form(entry):
 
 
 def translate(text, source):
-    """Free MyMemory API (no key, ~5000 characters a day). Returns "" if it fails."""
+    """Translate with free services that need no key: MyMemory first, then Google's public
+    endpoint. Returns "" if both fail (the reason is printed, so it shows in Render's logs)."""
+    lang = TRANSLATE_TO.split("-")[0]  # "pt" for Google
     try:
         r = requests.get("https://api.mymemory.translated.net/get",
                          params={"q": text, "langpair": f"{source}|{TRANSLATE_TO}"}, timeout=20)
-        out = r.json()["responseData"]["translatedText"].strip()
-        return "" if out.upper().startswith(("MYMEMORY WARNING", "QUERY LENGTH")) else out
-    except Exception:
-        return ""
+        d = r.json()
+        out = (d.get("responseData") or {}).get("translatedText", "").strip()
+        if str(d.get("responseStatus")) == "200" and out and out.lower() != text.lower() \
+                and not out.upper().startswith(("MYMEMORY WARNING", "QUERY LENGTH")):
+            return out
+        print(f"MyMemory gave no translation for {text!r}: {d.get('responseDetails') or out}", flush=True)
+    except Exception as e:
+        print(f"MyMemory failed for {text!r}: {e}", flush=True)
+    try:
+        r = requests.get("https://translate.googleapis.com/translate_a/single",
+                         params={"client": "gtx", "sl": source.split("-")[0] if source != "zh-CN" else "zh-CN",
+                                 "tl": lang, "dt": "t", "q": text}, timeout=20)
+        out = "".join(part[0] for part in r.json()[0] if part and part[0]).strip()
+        if out and out.lower() != text.lower():
+            return out
+        print(f"Google gave no translation for {text!r}", flush=True)
+    except Exception as e:
+        print(f"Google translate failed for {text!r}: {e}", flush=True)
+    return ""
 
 
 def lookup(hanzi):
@@ -116,7 +133,7 @@ def lookup(hanzi):
         english = re.sub(r"\(.*?\)", "", form["m"][0]).split(";")[0].strip()
         levels = sorted(int(l[1:]) for l in entry["l"] if l[0] == HSK_VERSION)
         return {"pinyin": form["i"]["y"],
-                "translation": translate(english, "en") or english,
+                "translation": translate(english, "en"),
                 "hsk": f"HSK-{levels[0]}" if levels else ""}
     # Not an HSK word: build pinyin character by character, translate the Chinese directly.
     pinyin = " ".join(main_form(words[c])["i"]["y"] if c in words else c for c in hanzi)
