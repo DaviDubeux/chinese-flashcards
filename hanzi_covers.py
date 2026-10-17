@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Fill each Notion flashcard from its Hanzi field: page cover, Pinyin, Tradução and HSK.
 
-Pinyin and HSK level come from the HSK word list (downloaded once); the Portuguese
+Pinyin comes from pypinyin, the HSK level from the HSK word list (downloaded once); the Portuguese
 translation comes from the free MyMemory API. Fields you already filled are left alone.
 
 Setup:
   1. Create an integration at https://www.notion.so/profile/integrations and copy its token.
   2. Open your flashcard database in Notion > ••• > Connections > add the integration.
-  3. pip install pillow requests
+  3. pip install -r requirements.txt
   4. export NOTION_TOKEN=secret_...   NOTION_DATABASE_ID=<32-char id from the database URL>
   5. python3 hanzi_covers.py            # fill empty fields, add missing covers
      python3 hanzi_covers.py --force    # also redo every cover
@@ -18,6 +18,7 @@ The font is Noto Serif SC (SIL Open Font License), so the images are free to sha
 """
 import io, json, os, re, sys, time
 import requests
+from pypinyin import Style, pinyin as to_pinyin
 from PIL import Image, ImageDraw, ImageFont
 
 HANZI_PROP = "Hanzi"     # title or text property holding the character(s)
@@ -124,20 +125,24 @@ def translate(text, source):
     return ""
 
 
+def word_pinyin(hanzi):
+    """Pinyin with tone marks, one syllable per character, e.g. 晚上好 -> "wǎn shàng hǎo".
+    pypinyin knows whole words, so characters with several readings come out right in context."""
+    return " ".join(s[0] for s in to_pinyin(hanzi, style=Style.TONE))
+
+
 def lookup(hanzi):
     """Pinyin, Portuguese translation and HSK level ("HSK-1", or "" if not in the list)."""
-    words = hsk_words()
-    entry = words.get(hanzi)
+    entry = hsk_words().get(hanzi)
     if entry:
         form = main_form(entry)
         english = re.sub(r"\(.*?\)", "", form["m"][0]).split(";")[0].strip()
         levels = sorted(int(l[1:]) for l in entry["l"] if l[0] == HSK_VERSION)
-        return {"pinyin": form["i"]["y"],
+        return {"pinyin": word_pinyin(hanzi),
                 "translation": translate(english, "en"),
                 "hsk": f"HSK-{levels[0]}" if levels else ""}
-    # Not an HSK word: build pinyin character by character, translate the Chinese directly.
-    pinyin = " ".join(main_form(words[c])["i"]["y"] if c in words else c for c in hanzi)
-    return {"pinyin": pinyin, "translation": translate(hanzi, "zh-CN"), "hsk": ""}
+    # Not an HSK word: translate the Chinese directly.
+    return {"pinyin": word_pinyin(hanzi), "translation": translate(hanzi, "zh-CN"), "hsk": ""}
 
 
 def prop_value(prop, value):
