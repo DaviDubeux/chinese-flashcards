@@ -3,8 +3,8 @@
 
   GET  /cover/<hanzi>.png   Public image link for anyone's Notion cover. No Notion access, no keys.
                             The template builds this link with a formula from the Hanzi field.
-  POST /?key=WEBHOOK_KEY    Your own "Make cover" button (Send webhook): sets the clicked card's
-                            cover and fills its empty Pinyin, Tradução and HSK fields.
+  POST /?key=WEBHOOK_KEY    Your Notion automation (Send webhook): sets the card's
+                            cover and fills its Pinyin and HSK fields.
 
 Environment variables:
   NOTION_TOKEN   your Hanzi Cover integration secret (ntn_...), for your own button

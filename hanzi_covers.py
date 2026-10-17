@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Fill each Notion flashcard from its Hanzi field: page cover, Pinyin, Tradução and HSK.
+"""Fill each Notion flashcard from its Hanzi field: page cover, Pinyin and HSK level.
 
-Pinyin comes from pypinyin, the HSK level from the HSK word list (downloaded once); the Portuguese
-translation comes from the free MyMemory API. Fields you already filled are left alone.
+Pinyin comes from pypinyin, the HSK level from the HSK word list (downloaded once).
+Fields you already filled are left alone.
 
 Setup:
   1. Create an integration at https://www.notion.so/profile/integrations and copy its token.
@@ -25,18 +25,16 @@ HANZI_PROP = "Hanzi"     # title or text property holding the character(s)
 PINYIN_PROP = "Pinyin"   # optional text property; ignored if missing
 SHOW_PINYIN = False      # set to True to print pinyin under the characters
 COVER_PROP = "Cover"     # optional Files & media property; also filled with the image if it exists
-TRANSLATION_PROP = "Tradução"  # text property for the Portuguese translation
 HSK_PROP = "HSK"         # select (or text/number) property, filled as e.g. "HSK-1"
-HSK_VERSION = "o"        # "o" = HSK 2.0 (levels 1-6), "n" = HSK 3.0 (levels 1-7)
-FILL_ONLY_EMPTY = True   # never overwrite Pinyin/Tradução/HSK you already typed
-TRANSLATE_TO = "pt-BR"     # Portuguese (Brazil); Tradução stays empty if no translation is found
+HSK_VERSION = "n"        # "o" = HSK 2.0 (levels 1-6), "n" = HSK 3.0 (levels 1-7)
+FILL_ONLY_EMPTY = False  # False: Pinyin/HSK follow the Hanzi each time the automation runs
 WIDTH, HEIGHT = 1500, 600  # Notion's cover size (shown center-cropped)
 BG, FG, SUB = "#FBF7EF", "#B22222", "#555555"
 
 FONT_URL = "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Serif/SubsetOTF/SC/NotoSerifSC-Bold.otf"
 FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "NotoSerifSC-Bold.otf")
 API = "https://api.notion.com/v1"
-# HSK word list with pinyin and English meanings (MIT licence): github.com/drkameleon/complete-hsk-vocabulary
+# HSK word list (MIT licence): github.com/drkameleon/complete-hsk-vocabulary
 HSK_URL = "https://raw.githubusercontent.com/drkameleon/complete-hsk-vocabulary/main/complete.min.json"
 HSK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hsk.json")
 _hsk = None
@@ -91,41 +89,6 @@ def hsk_words():
     return _hsk
 
 
-def main_form(entry):
-    # Skip proper-noun readings (capitalised pinyin, e.g. 还 "Huán", a surname).
-    forms = [f for f in entry["f"] if not f["i"]["y"][:1].isupper()] or entry["f"]
-    return forms[0]
-
-
-def translate(text, source):
-    """Translate with free services that need no key: Google's public endpoint first (better
-    quality for single words and names), then MyMemory. Returns "" if both fail; the reason is
-    printed, so it shows in Render's logs."""
-    try:
-        r = requests.get("https://translate.googleapis.com/translate_a/single",
-                         params={"client": "gtx", "sl": source, "tl": TRANSLATE_TO.split("-")[0],
-                                 "dt": "t", "q": text}, timeout=20)
-        r.raise_for_status()
-        out = "".join(part[0] for part in r.json()[0] if part and part[0]).strip()
-        if out and out.lower() != text.lower():
-            return out
-        print(f"Google gave no translation for {text!r}", flush=True)
-    except Exception as e:
-        print(f"Google translate failed for {text!r}: {e}", flush=True)
-    try:
-        r = requests.get("https://api.mymemory.translated.net/get",
-                         params={"q": text, "langpair": f"{source}|{TRANSLATE_TO}"}, timeout=20)
-        d = r.json()
-        out = (d.get("responseData") or {}).get("translatedText", "").strip()
-        if str(d.get("responseStatus")) == "200" and out and out.lower() != text.lower() \
-                and not out.upper().startswith(("MYMEMORY WARNING", "QUERY LENGTH")):
-            return out
-        print(f"MyMemory gave no translation for {text!r}: {d.get('responseDetails') or out}", flush=True)
-    except Exception as e:
-        print(f"MyMemory failed for {text!r}: {e}", flush=True)
-    return ""
-
-
 def word_pinyin(hanzi):
     """Pinyin with tone marks, one syllable per character, e.g. 晚上好 -> "wǎn shàng hǎo".
     pypinyin knows whole words, so characters with several readings come out right in context."""
@@ -133,17 +96,10 @@ def word_pinyin(hanzi):
 
 
 def lookup(hanzi):
-    """Pinyin, Portuguese translation and HSK level ("HSK-1", or "" if not in the list)."""
+    """Pinyin and HSK level ("HSK-1", or "" if the word isn't in the HSK list)."""
     entry = hsk_words().get(hanzi)
-    if entry:
-        form = main_form(entry)
-        english = re.sub(r"\(.*?\)", "", form["m"][0]).split(";")[0].strip()
-        levels = sorted(int(l[1:]) for l in entry["l"] if l[0] == HSK_VERSION)
-        return {"pinyin": word_pinyin(hanzi),
-                "translation": translate(english, "en"),
-                "hsk": f"HSK-{levels[0]}" if levels else ""}
-    # Not an HSK word: translate the Chinese directly.
-    return {"pinyin": word_pinyin(hanzi), "translation": translate(hanzi, "zh-CN"), "hsk": ""}
+    levels = sorted(int(l[1:]) for l in entry["l"] if l[0] == HSK_VERSION) if entry else []
+    return {"pinyin": word_pinyin(hanzi), "hsk": f"HSK-{levels[0]}" if levels else ""}
 
 
 def prop_value(prop, value):
@@ -211,10 +167,10 @@ class Notion:
         return hanzi
 
     def fill_fields(self, page):
-        """Fill Pinyin, Tradução and HSK from the word lists. Returns what was written."""
+        """Fill Pinyin and HSK level. Returns what was written."""
         props = page["properties"]
         hanzi = plain(props.get(HANZI_PROP))
-        targets = {"pinyin": PINYIN_PROP, "translation": TRANSLATION_PROP, "hsk": HSK_PROP}
+        targets = {"pinyin": PINYIN_PROP, "hsk": HSK_PROP}
         todo = {k: n for k, n in targets.items()
                 if n in props and (not FILL_ONLY_EMPTY or is_empty(props[n]))}
         if not hanzi or not todo:
