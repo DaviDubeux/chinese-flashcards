@@ -98,9 +98,20 @@ def main_form(entry):
 
 
 def translate(text, source):
-    """Translate with free services that need no key: MyMemory first, then Google's public
-    endpoint. Returns "" if both fail (the reason is printed, so it shows in Render's logs)."""
-    lang = TRANSLATE_TO.split("-")[0]  # "pt" for Google
+    """Translate with free services that need no key: Google's public endpoint first (better
+    quality for single words and names), then MyMemory. Returns "" if both fail; the reason is
+    printed, so it shows in Render's logs."""
+    try:
+        r = requests.get("https://translate.googleapis.com/translate_a/single",
+                         params={"client": "gtx", "sl": source, "tl": TRANSLATE_TO.split("-")[0],
+                                 "dt": "t", "q": text}, timeout=20)
+        r.raise_for_status()
+        out = "".join(part[0] for part in r.json()[0] if part and part[0]).strip()
+        if out and out.lower() != text.lower():
+            return out
+        print(f"Google gave no translation for {text!r}", flush=True)
+    except Exception as e:
+        print(f"Google translate failed for {text!r}: {e}", flush=True)
     try:
         r = requests.get("https://api.mymemory.translated.net/get",
                          params={"q": text, "langpair": f"{source}|{TRANSLATE_TO}"}, timeout=20)
@@ -112,16 +123,6 @@ def translate(text, source):
         print(f"MyMemory gave no translation for {text!r}: {d.get('responseDetails') or out}", flush=True)
     except Exception as e:
         print(f"MyMemory failed for {text!r}: {e}", flush=True)
-    try:
-        r = requests.get("https://translate.googleapis.com/translate_a/single",
-                         params={"client": "gtx", "sl": source.split("-")[0] if source != "zh-CN" else "zh-CN",
-                                 "tl": lang, "dt": "t", "q": text}, timeout=20)
-        out = "".join(part[0] for part in r.json()[0] if part and part[0]).strip()
-        if out and out.lower() != text.lower():
-            return out
-        print(f"Google gave no translation for {text!r}", flush=True)
-    except Exception as e:
-        print(f"Google translate failed for {text!r}: {e}", flush=True)
     return ""
 
 
