@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Render a cover image from each Notion entry's Hanzi field and set it as the page cover.
+"""Fill each Notion flashcard from its Hanzi field: page cover, Pinyin, Tradução and HSK.
+
+Pinyin and HSK level come from the HSK word list (downloaded once); the Portuguese
+translation comes from the free MyMemory API. Fields you already filled are left alone.
 
 Setup:
   1. Create an integration at https://www.notion.so/profile/integrations and copy its token.
   2. Open your flashcard database in Notion > ••• > Connections > add the integration.
   3. pip install pillow requests
   4. export NOTION_TOKEN=secret_...   NOTION_DATABASE_ID=<32-char id from the database URL>
-  5. python3 hanzi_covers.py            # only entries without a cover
-     python3 hanzi_covers.py --force    # redo every entry
+  5. python3 hanzi_covers.py            # fill empty fields, add missing covers
+     python3 hanzi_covers.py --force    # also redo every cover
      python3 hanzi_covers.py --preview 你好   # just write preview.png, no Notion calls
 
 Property names are set below (HANZI_PROP, PINYIN_PROP). Pinyin is optional.
 The font is Noto Serif SC (SIL Open Font License), so the images are free to share.
 """
-import io, os, sys, time
+import io, json, os, re, sys, time
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
@@ -21,12 +24,21 @@ HANZI_PROP = "Hanzi"     # title or text property holding the character(s)
 PINYIN_PROP = "Pinyin"   # optional text property; ignored if missing
 SHOW_PINYIN = False      # set to True to print pinyin under the characters
 COVER_PROP = "Cover"     # optional Files & media property; also filled with the image if it exists
+TRANSLATION_PROP = "Tradução"  # text property for the Portuguese translation
+HSK_PROP = "HSK"         # select (or text/number) property, filled as e.g. "HSK-1"
+HSK_VERSION = "o"        # "o" = HSK 2.0 (levels 1-6), "n" = HSK 3.0 (levels 1-7)
+FILL_ONLY_EMPTY = True   # never overwrite Pinyin/Tradução/HSK you already typed
+TRANSLATE_TO = "pt-BR"
 WIDTH, HEIGHT = 1500, 600  # Notion's cover size (shown center-cropped)
 BG, FG, SUB = "#FBF7EF", "#B22222", "#555555"
 
 FONT_URL = "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Serif/SubsetOTF/SC/NotoSerifSC-Bold.otf"
 FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "NotoSerifSC-Bold.otf")
 API = "https://api.notion.com/v1"
+# HSK word list with pinyin and English meanings (MIT licence): github.com/drkameleon/complete-hsk-vocabulary
+HSK_URL = "https://raw.githubusercontent.com/drkameleon/complete-hsk-vocabulary/main/complete.min.json"
+HSK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hsk.json")
+_hsk = None
 
 
 def font(size):
@@ -62,6 +74,74 @@ def render(hanzi, pinyin=""):
     buf = io.BytesIO()
     img.save(buf, "PNG")
     return buf.getvalue()
+
+
+def hsk_words():
+    global _hsk
+    if _hsk is None:
+        if not os.path.exists(HSK_PATH):
+            print("Downloading HSK word list...")
+            r = requests.get(HSK_URL, timeout=120)
+            r.raise_for_status()
+            with open(HSK_PATH, "wb") as fh:
+                fh.write(r.content)
+        with open(HSK_PATH, encoding="utf-8") as fh:
+            _hsk = {e["s"]: e for e in json.load(fh)}
+    return _hsk
+
+
+def main_form(entry):
+    # Skip proper-noun readings (capitalised pinyin, e.g. 还 "Huán", a surname).
+    forms = [f for f in entry["f"] if not f["i"]["y"][:1].isupper()] or entry["f"]
+    return forms[0]
+
+
+def translate(text, source):
+    """Free MyMemory API (no key, ~5000 characters a day). Returns "" if it fails."""
+    try:
+        r = requests.get("https://api.mymemory.translated.net/get",
+                         params={"q": text, "langpair": f"{source}|{TRANSLATE_TO}"}, timeout=20)
+        out = r.json()["responseData"]["translatedText"].strip()
+        return "" if out.upper().startswith(("MYMEMORY WARNING", "QUERY LENGTH")) else out
+    except Exception:
+        return ""
+
+
+def lookup(hanzi):
+    """Pinyin, Portuguese translation and HSK level ("HSK-1", or "" if not in the list)."""
+    words = hsk_words()
+    entry = words.get(hanzi)
+    if entry:
+        form = main_form(entry)
+        english = re.sub(r"\(.*?\)", "", form["m"][0]).split(";")[0].strip()
+        levels = sorted(int(l[1:]) for l in entry["l"] if l[0] == HSK_VERSION)
+        return {"pinyin": form["i"]["y"],
+                "translation": translate(english, "en") or english,
+                "hsk": f"HSK-{levels[0]}" if levels else ""}
+    # Not an HSK word: build pinyin character by character, translate the Chinese directly.
+    pinyin = " ".join(main_form(words[c])["i"]["y"] if c in words else c for c in hanzi)
+    return {"pinyin": pinyin, "translation": translate(hanzi, "zh-CN"), "hsk": ""}
+
+
+def prop_value(prop, value):
+    """Notion property payload for a text, select or number property."""
+    kind = prop["type"]
+    if kind in ("rich_text", "title"):
+        return {kind: [{"text": {"content": value}}]}
+    if kind == "select":
+        return {"select": {"name": value}}
+    if kind == "multi_select":
+        return {"multi_select": [{"name": value}]}
+    if kind == "number":
+        digits = re.sub(r"\D", "", value)
+        return {"number": int(digits)} if digits else None
+    return None
+
+
+def is_empty(prop):
+    kind = prop["type"]
+    value = prop.get(kind)
+    return value in (None, [], "") or (kind in ("rich_text", "title") and not plain(prop))
 
 
 def plain(prop):
@@ -107,6 +187,25 @@ class Notion:
         self.set_cover(page, render(hanzi, pinyin), f"{hanzi}.png")
         return hanzi
 
+    def fill_fields(self, page):
+        """Fill Pinyin, Tradução and HSK from the word lists. Returns what was written."""
+        props = page["properties"]
+        hanzi = plain(props.get(HANZI_PROP))
+        targets = {"pinyin": PINYIN_PROP, "translation": TRANSLATION_PROP, "hsk": HSK_PROP}
+        todo = {k: n for k, n in targets.items()
+                if n in props and (not FILL_ONLY_EMPTY or is_empty(props[n]))}
+        if not hanzi or not todo:
+            return {}
+        info = lookup(hanzi)
+        update = {}
+        for key, name in todo.items():
+            value = prop_value(props[name], info[key]) if info[key] else None
+            if value:
+                update[name] = value
+        if update:
+            self.call("PATCH", f"/pages/{page['id']}", json={"properties": update})
+        return {k: info[k] for k, n in todo.items() if n in update}
+
     def set_cover(self, page, png, name):
         up = self.call("POST", "/file_uploads", json={"filename": name, "content_type": "image/png"})
         self.call("POST", f"/file_uploads/{up['id']}/send", files={"file": (name, png, "image/png")})
@@ -137,17 +236,20 @@ def main():
             if HANZI_PROP not in props:
                 sys.exit(f"No property named '{HANZI_PROP}'. Change HANZI_PROP at the top of the script.")
         hanzi = plain(props.get(HANZI_PROP))
-        cover_col = props.get(COVER_PROP, {})
-        has_cover = page.get("cover") and (cover_col.get("type") != "files" or cover_col["files"])
-        if not hanzi or (has_cover and not force):
-            print(f"- skipped {hanzi or '(empty Hanzi)'}: " + ("no Hanzi" if not hanzi else "already has a cover"))
+        if not hanzi:
             skipped += 1
             continue
-        pinyin = plain(props.get(PINYIN_PROP)) if SHOW_PINYIN else ""
-        nt.set_cover(page, render(hanzi, pinyin), f"{hanzi}.png")
-        done += 1
-        print(f"✓ {hanzi}")
-    print(f"Done: {done} covers set, {skipped} skipped.")
+        filled = nt.fill_fields(page)
+        cover_col = props.get(COVER_PROP, {})
+        has_cover = page.get("cover") and (cover_col.get("type") != "files" or cover_col["files"])
+        if not has_cover or force:
+            nt.cover_page(page)
+        if filled or not has_cover or force:
+            done += 1
+            print(f"✓ {hanzi} " + " | ".join(filled.values()))
+        else:
+            skipped += 1
+    print(f"Done: {done} cards updated, {skipped} already complete.")
 
 
 if __name__ == "__main__":

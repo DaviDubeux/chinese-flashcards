@@ -1,0 +1,4 @@
+*.otf
+preview.png
+__pycache__/
+hsk.json
