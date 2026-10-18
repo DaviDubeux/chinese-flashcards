@@ -17,6 +17,25 @@ The Notion automation runs this whenever a card is created or its Hanzi is edite
 2. On Render, keep `NOTION_TOKEN` (your Hanzi Cover secret) and `WEBHOOK_KEY`.
 3. Your Notion database automation (trigger: page added, or Hanzi edited) uses **Send webhook** to `https://chinese-flashcards-pjkb.onrender.com/?key=YOUR_WEBHOOK_KEY`.
 
+## Button: pick 10 random cards
+A Notion button can mark 10 random cards, for example to choose today's review set.
+1. In Flashcards, add the property the button should set, for example a checkbox named `Review`.
+2. Make sure your Hanzi Cover integration is connected to the database (it already is if covers work).
+3. Add a button, with the action **Send webhook** to
+   `https://chinese-flashcards-pjkb.onrender.com/random?key=YOUR_WEBHOOK_KEY&prop=Review&n=10&reset=1`
+
+Each click unchecks the previous set (`reset=1`) and checks 10 random cards that weren't checked. Leave out `reset=1` to keep adding cards instead.
+
+| Option | Example | What it does |
+|---|---|---|
+| `prop` | `Review` | The property to set. Required. Works with checkbox, select, status, multi-select, text, number and date properties. |
+| `n` | `10` | How many cards. |
+| `value` | `Hoje` | What to set. Default: checked for a checkbox, today for a date. |
+| `reset` | `1` | First clear the property on every card. Status properties can't be cleared. |
+| `db` | `1a2b...` | The database id. Only needed if the button isn't on a page inside Flashcards; you can set `NOTION_DATABASE_ID` on Render instead. |
+
+The Render log shows the picked cards, for example `✓ random: Review=true on 10 cards (10 cleared): 我 你 ...`.
+
 ## Fill all your cards at once (on your computer)
 ```
 NOTION_TOKEN=ntn_... NOTION_DATABASE_ID=... python3 hanzi_covers.py
