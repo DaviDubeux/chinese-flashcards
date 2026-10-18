@@ -11,13 +11,15 @@
                             (by Status); a status short of cards is completed by the next harder
                             one, then the next easier one. Options:
                               prop=...   the property to set (default Revisar)
-                              by=...     the difficulty property (default Status)
+                              by=...     the difficulty property (default: Status, else the
+                                         select/status property holding the mix names)
                               mix=...    default Difícil:5,Médio:3,Fácil:2, hardest first
                               n=10       just 10 random cards, ignoring difficulty
                               value=...  what to set (default: checked / today / "true")
                               reset=1    first clear prop on every card that has it
                               db=...     database id (default: NOTION_DATABASE_ID, else the
-                                         database of the page the button is on)
+                                         database of the page the button is on, else
+                                         the shared database that has prop)
 
 Environment variables:
   NOTION_TOKEN   your Hanzi Cover integration secret (ntn_...), for your own button
@@ -102,10 +104,23 @@ def pick(groups, quotas):
 def pick_random(db, name, mix, by, value, reset):
     try:
         nt = Notion(TOKEN)
+        if not db:  # button outside the database: use the shared database that has prop
+            dbs = nt.call("POST", "/search", json={"filter": {"property": "object", "value": "database"}})
+            db = next((d["id"] for d in dbs["results"] if name in d.get("properties", {})), None)
+            if not db:
+                print(f"✗ random: no database with a property named '{name}' is shared with the integration",
+                      flush=True)
+                return
         pages = list(nt.pages(db))
-        for need in (name, by):
-            if need and (not pages or need not in pages[0]["properties"]):
-                print(f"✗ random: no property named '{need}'", flush=True)
+        if not pages or name not in pages[0]["properties"]:
+            print(f"✗ random: no property named '{name}'", flush=True)
+            return
+        if by and by not in pages[0]["properties"]:  # find the property holding Difícil/Médio/Fácil
+            names = {g.casefold() for g, _ in mix}
+            by = next((k for k, v in pages[0]["properties"].items() if v["type"] in ("select", "status")
+                       and any(current(p["properties"][k]).casefold() in names for p in pages)), None)
+            if not by:
+                print("✗ random: no select or status property holding " + ", ".join(g for g, _ in mix), flush=True)
                 return
         if value is None:  # default: checked, today, or the word "true"
             value = {"checkbox": "true", "date": "today"}.get(pages[0]["properties"][name]["type"], "true")
@@ -177,7 +192,7 @@ class Handler(BaseHTTPRequestHandler):
                         q.get("mix", "Difícil:5,Médio:3,Fácil:2").split(",")] if by else [("", int(q["n"]))])
             except (ValueError, IndexError):
                 mix = None
-            ok = bool(db and mix)
+            ok = bool(mix)
             self.send_response(200 if ok else 400)
             self.end_headers()
             if ok:
