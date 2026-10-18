@@ -5,9 +5,15 @@
                             The template builds this link with a formula from the Hanzi field.
   POST /?key=WEBHOOK_KEY    Your Notion automation (Send webhook): sets the card's
                             cover and fills its Pinyin and HSK fields.
-  POST /random?key=WEBHOOK_KEY&prop=Revisar&n=10
-                            Your Notion button (Send webhook): picks n random cards that don't
-                            have the value yet and sets prop on them. Options:
+  POST /random?key=WEBHOOK_KEY&reset=1
+                            Your Notion button (Send webhook): picks random cards that don't have
+                            the value yet and sets Revisar on them: 5 Difícil, 3 Médio, 2 Fácil
+                            (by Status); a status short of cards is completed by the next harder
+                            one, then the next easier one. Options:
+                              prop=...   the property to set (default Revisar)
+                              by=...     the difficulty property (default Status)
+                              mix=...    default Difícil:5,Médio:3,Fácil:2, hardest first
+                              n=10       just 10 random cards, ignoring difficulty
                               value=...  what to set (default: checked / today / "true")
                               reset=1    first clear prop on every card that has it
                               db=...     database id (default: NOTION_DATABASE_ID, else the
@@ -81,13 +87,26 @@ def current(prop):
     return plain(prop)
 
 
-def pick_random(db, name, n, value, reset):
+def pick(groups, quotas):
+    """Pick quotas[i] random cards from groups[i] (hardest first). A group short of cards is
+    completed from the nearest harder group, then the nearest easier one."""
+    left = [random.sample(g, len(g)) for g in groups]
+    chosen = [[left[i].pop() for _ in range(min(q, len(left[i])))] for i, q in enumerate(quotas)]
+    for i, q in enumerate(quotas):
+        for j in list(range(i - 1, -1, -1)) + list(range(i + 1, len(groups))):
+            while len(chosen[i]) < q and left[j]:
+                chosen[i].append(left[j].pop())
+    return [p for c in chosen for p in c]
+
+
+def pick_random(db, name, mix, by, value, reset):
     try:
         nt = Notion(TOKEN)
         pages = list(nt.pages(db))
-        if not pages or name not in pages[0]["properties"]:
-            print(f"✗ random: no property named '{name}'", flush=True)
-            return
+        for need in (name, by):
+            if need and (not pages or need not in pages[0]["properties"]):
+                print(f"✗ random: no property named '{need}'", flush=True)
+                return
         if value is None:  # default: checked, today, or the word "true"
             value = {"checkbox": "true", "date": "today"}.get(pages[0]["properties"][name]["type"], "true")
         target = set_value(pages[0]["properties"][name], value)
@@ -102,11 +121,17 @@ def pick_random(db, name, n, value, reset):
                     p["properties"][name] = {"type": prop["type"], **set_value(prop, "")}
                     cleared += 1
         pool = [p for p in pages if current(p["properties"][name]) != want]
-        chosen = random.sample(pool, min(n, len(pool)))
+        if by:
+            level = lambda p: current(p["properties"][by]).strip().casefold()
+            groups = [[p for p in pool if level(p) == g.casefold()] for g, _ in mix]
+        else:
+            groups = [pool]
+        chosen = pick(groups, [q for _, q in mix])
         for p in chosen:
             nt.call("PATCH", f"/pages/{p['id']}", json={"properties": {name: target}})
-        words = [plain(p["properties"].get("Hanzi")) or p["id"] for p in chosen]
-        print(f"✓ random: {name}={value} on {len(chosen)} cards ({cleared} cleared): " + " ".join(words),
+        words = [(plain(p["properties"].get("Hanzi")) or p["id"]) + (f" ({current(p['properties'][by])})" if by else "")
+                 for p in chosen]
+        print(f"✓ random: {name}={value} on {len(chosen)} cards ({cleared} cleared): " + ", ".join(words),
               flush=True)
     except Exception as e:
         print(f"✗ random: {e}", flush=True)
@@ -145,11 +170,18 @@ class Handler(BaseHTTPRequestHandler):
         if url.path.rstrip("/") == "/random":
             parent = body.get("data", body).get("parent", {})
             db = q.get("db") or os.environ.get("NOTION_DATABASE_ID") or parent.get("database_id")
-            ok = bool(db and q.get("prop"))
+            # Default: Revisar on 5 Difícil, 3 Médio and 2 Fácil cards by Status. n=10 alone ignores Status.
+            by = q.get("by", "" if "n" in q else "Status")
+            try:
+                mix = ([(g.rsplit(":", 1)[0], int(g.rsplit(":", 1)[1])) for g in
+                        q.get("mix", "Difícil:5,Médio:3,Fácil:2").split(",")] if by else [("", int(q["n"]))])
+            except (ValueError, IndexError):
+                mix = None
+            ok = bool(db and mix)
             self.send_response(200 if ok else 400)
             self.end_headers()
             if ok:
-                threading.Thread(target=pick_random, args=(db, q["prop"], int(q.get("n", 10)),
+                threading.Thread(target=pick_random, args=(db, q.get("prop", "Revisar"), mix, by,
                                                            q.get("value"), q.get("reset") == "1")).start()
             return
         page_id = body.get("data", body).get("id")  # Notion sends the clicked page under "data"
