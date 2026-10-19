@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
-"""Pick random flashcards to review and mark them.
+"""Escolhe flashcards aleatórios para revisar e marca esses cards.
 
-By default it sets Revisar on 10 random cards: 5 Difícil, 3 Médio and 2 Fácil (from Status).
-A status short of cards is completed by the next harder status, then the next easier one.
-Cards that already have the value, or have another status, are never picked.
+Por padrão marca Revisar em 10 cards aleatórios: 5 Difícil, 3 Médio e 2 Fácil (pelo Status).
+Se faltar card num status, o próximo status mais difícil completa, depois o próximo mais fácil.
+Cards que já têm o valor, ou que têm outro status, nunca são escolhidos.
 
-This is what the review button's webhook runs, and you can run it yourself:
-  python3 pick_random.py --reset            # clear the last set, then mark a new one
-  python3 pick_random.py                    # mark 10 more, keeping the last set
+É o que o webhook do botão de revisão roda, e você pode rodar por conta própria:
+  python3 pick_random.py --reset            # desmarca o grupo anterior e marca um novo
+  python3 pick_random.py                    # marca mais 10, mantendo o grupo anterior
 
-Options:
-  --prop NAME     the property to set (default Revisar)
-  --value VALUE   what to set (default: checked for a checkbox, today for a date)
-  --by NAME       the difficulty property (default Status, else the select/status
-                  property that holds the --mix names)
-  --mix MIX       how many of each, hardest first (default Difícil:5,Médio:3,Fácil:2)
-  --n N           just N random cards, ignoring difficulty
-  --reset         first clear the property on every card (status properties can't be cleared)
-  --db ID         the database (default NOTION_DATABASE_ID, else the database shared with
-                  your integration that has --prop)
+Opções:
+  --prop NOME     a propriedade a marcar (padrão Revisar)
+  --value VALOR   o valor a definir (padrão: marcado numa caixa de seleção, hoje numa data)
+  --by NOME       a propriedade de dificuldade (padrão Status, senão a propriedade de
+                  seleção ou status que tem os nomes do --mix)
+  --mix MIX       quantos de cada, do mais difícil ao mais fácil (padrão Difícil:5,Médio:3,Fácil:2)
+  --n N           só N cards aleatórios, ignorando a dificuldade
+  --reset         primeiro limpa a propriedade em todos os cards (status não pode ser limpo)
+  --db ID         o banco de dados (padrão NOTION_DATABASE_ID, senão o banco compartilhado
+                  com a sua integração que tem a --prop)
 
-Environment variables:
-  NOTION_TOKEN        your integration secret (ntn_...)
-  NOTION_DATABASE_ID  optional, see --db
+Variáveis de ambiente:
+  NOTION_TOKEN        o segredo da sua integração (ntn_...)
+  NOTION_DATABASE_ID  opcional, veja --db
 """
 import argparse, datetime, os, random, sys
 
@@ -88,7 +88,7 @@ def find_database(nt, name):
     dbs = nt.call("POST", "/search", json={"filter": {"property": "object", "value": "database"}})
     db = next((d["id"] for d in dbs["results"] if name in d.get("properties", {})), None)
     if not db:
-        raise PickError(f"no database with a property named '{name}' is shared with the integration")
+        raise PickError(f"nenhum banco compartilhado com a integração tem uma propriedade chamada '{name}'")
     return db
 
 
@@ -98,13 +98,13 @@ def pick_random(nt, db=None, name=PROP, mix=None, by=BY, value=None, reset=False
     mix = mix or parse_mix(MIX)
     pages = list(nt.pages(db or find_database(nt, name)))
     if not pages or name not in pages[0]["properties"]:
-        raise PickError(f"no property named '{name}'")
+        raise PickError(f"nenhuma propriedade chamada '{name}'")
     if by and by not in pages[0]["properties"]:  # find the property holding Difícil/Médio/Fácil
         names = {g.casefold() for g, _ in mix}
         by = next((k for k, v in pages[0]["properties"].items() if v["type"] in ("select", "status")
                    and any(current(p["properties"][k]).casefold() in names for p in pages)), None)
         if not by:
-            raise PickError("no select or status property holding " + ", ".join(g for g, _ in mix))
+            raise PickError("nenhuma propriedade de seleção ou status com " + ", ".join(g for g, _ in mix))
     if value is None:  # default: checked, today, or the word "true"
         value = {"checkbox": "true", "date": "today"}.get(pages[0]["properties"][name]["type"], "true")
     target = set_value(pages[0]["properties"][name], value)
@@ -129,25 +129,27 @@ def pick_random(nt, db=None, name=PROP, mix=None, by=BY, value=None, reset=False
         nt.call("PATCH", f"/pages/{p['id']}", json={"properties": {name: target}})
     words = [(plain(p["properties"].get(HANZI_PROP)) or p["id"]) + (f" ({current(p['properties'][by])})" if by else "")
              for p in chosen]
-    return f"✓ random: {name}={value} on {len(chosen)} cards ({cleared} cleared): " + ", ".join(words)
+    return f"✓ revisão: {name}={value} em {len(chosen)} cards ({cleared} desmarcados): " + ", ".join(words)
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Pick random flashcards to review and mark them.",
-                                 epilog="Run with -h for the defaults; the top of this file explains each option.")
-    ap.add_argument("--prop", default=PROP)
-    ap.add_argument("--value")
-    ap.add_argument("--by", default=BY)
-    ap.add_argument("--mix", default=MIX)
-    ap.add_argument("--n", type=int)
-    ap.add_argument("--reset", action="store_true")
-    ap.add_argument("--db", default=os.environ.get("NOTION_DATABASE_ID"))
+    ap = argparse.ArgumentParser(description="Escolhe flashcards aleatórios para revisar e marca esses cards.",
+                                 add_help=False)
+    ap.add_argument("-h", "--help", action="help", help="mostra esta ajuda")
+    ap.add_argument("--prop", default=PROP, metavar="NOME", help=f"a propriedade a marcar (padrão {PROP})")
+    ap.add_argument("--value", metavar="VALOR", help="o valor a definir (padrão: marcado, ou hoje numa data)")
+    ap.add_argument("--by", default=BY, metavar="NOME", help=f"a propriedade de dificuldade (padrão {BY})")
+    ap.add_argument("--mix", default=MIX, help=f"quantos de cada, do mais difícil ao mais fácil (padrão {MIX})")
+    ap.add_argument("--n", type=int, help="só N cards aleatórios, ignorando a dificuldade")
+    ap.add_argument("--reset", action="store_true", help="primeiro limpa a propriedade em todos os cards")
+    ap.add_argument("--db", default=os.environ.get("NOTION_DATABASE_ID"), metavar="ID",
+                    help="o id do banco de dados (padrão NOTION_DATABASE_ID)")
     a = ap.parse_args()
-    token = os.environ.get("NOTION_TOKEN") or sys.exit("Set NOTION_TOKEN first (see the README).")
+    token = os.environ.get("NOTION_TOKEN") or sys.exit("Defina NOTION_TOKEN primeiro (veja o README).")
     try:
         mix = [("", a.n)] if a.n else parse_mix(a.mix)
     except (ValueError, IndexError):
-        sys.exit(f"--mix should look like {MIX}")
+        sys.exit(f"O --mix deve ser no formato {MIX}")
     try:
         print(pick_random(Notion(token), a.db, a.prop, mix, "" if a.n else a.by, a.value, a.reset))
     except PickError as e:

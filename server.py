@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Hanzi cover service.
+"""Servidor dos webhooks do Notion.
 
-  GET  /cover/<hanzi>.png   Public image link for anyone's Notion cover. No Notion access, no keys.
-                            The template builds this link with a formula from the Hanzi field.
-  POST /?key=WEBHOOK_KEY    Your Notion automation (Send webhook): runs fill_card.py on the
-                            card, which sets its cover and fills its Pinyin and HSK fields.
+  GET  /cover/<hanzi>.png   Link público de imagem para a capa de qualquer pessoa. Sem acesso ao
+                            Notion, sem chaves. O template monta esse link com uma fórmula do Hanzi.
+  POST /?key=WEBHOOK_KEY    Sua automação do Notion (Enviar webhook): roda fill_card.py no card,
+                            que define a capa e preenche Pinyin e HSK.
   POST /random?key=WEBHOOK_KEY&reset=1
-                            Your Notion button (Send webhook): runs pick_random.py. The URL takes
-                            the same options as the script: prop, value, by, mix, n, reset=1, db.
-                            Without db it uses NOTION_DATABASE_ID, else the database of the page
-                            the button is on, else the shared database that has prop.
+                            Seu botão do Notion (Enviar webhook): roda pick_random.py. O link aceita
+                            as mesmas opções do script: prop, value, by, mix, n, reset=1, db.
+                            Sem db, usa NOTION_DATABASE_ID, senão o banco da página onde está o
+                            botão, senão o banco compartilhado que tem a prop.
 
-Environment variables:
-  NOTION_TOKEN   your Hanzi Cover integration secret (ntn_...), for your own button
-  WEBHOOK_KEY    any long random word you choose; your button URL ends in ?key=<WEBHOOK_KEY>
-  NOTION_DATABASE_ID  optional, the flashcards database for /random
-  PORT           set automatically by most hosts (default 8000)
+Variáveis de ambiente:
+  NOTION_TOKEN   o segredo da sua integração (ntn_...)
+  WEBHOOK_KEY    qualquer palavra longa e aleatória; o link do webhook termina em ?key=<WEBHOOK_KEY>
+  NOTION_DATABASE_ID  opcional, o banco de flashcards para /random
+  PORT           definida automaticamente pela maioria dos hosts (padrão 8000)
 """
 import hmac, json, os, threading
 from functools import lru_cache
@@ -51,7 +51,7 @@ def handle_random(*args):
     try:
         print(pick_random(Notion(TOKEN), *args), flush=True)
     except Exception as e:
-        print(f"✗ random: {e}", flush=True)
+        print(f"✗ revisão: {e}", flush=True)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -74,7 +74,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.end_headers()
-        self.wfile.write("Hanzi cover service is running. Example: /cover/学.png".encode())
+        self.wfile.write("O servidor das capas de Hanzi está no ar. Exemplo: /cover/学.png".encode())
 
     def do_POST(self):
         url = urlparse(self.path)
@@ -109,5 +109,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    print(f"Listening on port {port}", flush=True)
+    print(f"Ouvindo na porta {port}", flush=True)
     ThreadingHTTPServer(("", port), Handler).serve_forever()

@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
-"""Shared code: draws the Hanzi cover images and talks to Notion.
+"""Código compartilhado: desenha as capas com os Hanzi e conversa com o Notion.
 
-Pinyin comes from pypinyin, the HSK level from the HSK word list (downloaded once).
-You don't run this file to update cards; use fill_card.py and pick_random.py.
-To check how a cover looks, without any Notion calls:
-  python3 hanzi_covers.py --preview 你好   # writes preview.png
+O Pinyin vem do pypinyin, o nível HSK da lista de palavras do HSK (baixada uma vez).
+Você não roda este arquivo para atualizar cards; use fill_card.py e pick_random.py.
+Para ver como uma capa fica, sem nenhuma chamada ao Notion:
+  python3 hanzi_covers.py --preview 你好   # gera preview.png
 
-Property names are set below (HANZI_PROP, PINYIN_PROP). Pinyin is optional.
-The font is LXGW WenKai GB, a textbook-style Kai (SIL Open Font License), so the images are free to share.
+Os nomes das propriedades ficam logo abaixo (HANZI_PROP, PINYIN_PROP). O Pinyin é opcional.
+A fonte é a LXGW WenKai GB, uma Kai no estilo de livro didático (SIL Open Font License),
+então as imagens podem ser compartilhadas livremente.
 """
 import io, json, os, re, sys, time
 import requests
 from pypinyin import Style, pinyin as to_pinyin
 from PIL import Image, ImageDraw, ImageFont
 
-HANZI_PROP = "Hanzi"     # title or text property holding the character(s)
-PINYIN_PROP = "Pinyin"   # optional text property; ignored if missing
-SHOW_PINYIN = False      # set to True to print pinyin under the characters
-COVER_PROP = "Cover"     # optional Files & media property; also filled with the image if it exists
-HSK_PROP = "HSK"         # select (or text/number) property, filled as e.g. "HSK-1"
-HSK_VERSION = "n"        # "o" = HSK 2.0 (levels 1-6), "n" = HSK 3.0 (levels 1-7)
-FILL_ONLY_EMPTY = False  # False: Pinyin/HSK follow the Hanzi each time the automation runs
+HANZI_PROP = "Hanzi"     # propriedade de título ou texto com o(s) caractere(s)
+PINYIN_PROP = "Pinyin"   # propriedade de texto opcional; ignorada se não existir
+SHOW_PINYIN = False      # True mostra o pinyin embaixo dos caracteres
+COVER_PROP = "Cover"     # propriedade opcional de Arquivos e mídia; também recebe a imagem se existir
+HSK_PROP = "HSK"         # propriedade de seleção (ou texto/número), preenchida como "HSK-1"
+HSK_VERSION = "n"        # "o" = HSK 2.0 (níveis 1-6), "n" = HSK 3.0 (níveis 1-7)
+FILL_ONLY_EMPTY = False  # False: Pinyin/HSK acompanham o Hanzi toda vez que a automação roda
 WIDTH, HEIGHT = 1500, 600  # Notion's cover size (shown center-cropped)
 BG, FG, SUB = "#FBF7EF", "#B22222", "#555555"
 
@@ -35,7 +36,7 @@ _hsk = None
 
 def font(size):
     if not os.path.exists(FONT_PATH):
-        print("Downloading LXGW WenKai GB font...")
+        print("Baixando a fonte LXGW WenKai GB...")
         # requests ships its own certificates (certifi), unlike urllib on some Macs.
         r = requests.get(FONT_URL, timeout=120)
         r.raise_for_status()
@@ -72,7 +73,7 @@ def hsk_words():
     global _hsk
     if _hsk is None:
         if not os.path.exists(HSK_PATH):
-            print("Downloading HSK word list...")
+            print("Baixando a lista de palavras do HSK...")
             r = requests.get(HSK_URL, timeout=120)
             r.raise_for_status()
             with open(HSK_PATH, "wb") as fh:
@@ -195,10 +196,10 @@ class Notion:
 def main():
     args = sys.argv[1:]
     if args[:1] != ["--preview"] or len(args) < 2:
-        sys.exit("Usage: python3 hanzi_covers.py --preview 你好 [pinyin]\n"
-                 "To update cards, use fill_card.py or pick_random.py.")
+        sys.exit("Uso: python3 hanzi_covers.py --preview 你好 [pinyin]\n"
+                 "Para atualizar cards, use fill_card.py ou pick_random.py.")
     open("preview.png", "wb").write(render(args[1], args[2] if len(args) > 2 else ""))
-    print("Wrote preview.png")
+    print("preview.png gerado")
 
 
 if __name__ == "__main__":

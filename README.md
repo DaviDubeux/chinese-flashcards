@@ -1,116 +1,116 @@
-# Hanzi flashcards for Notion
+# Flashcards de Hanzi para o Notion
 
-Two small Python scripts for a Notion flashcard database:
+Dois scripts Python pequenos para um banco de dados de flashcards no Notion:
 
-- **`fill_card.py`** takes the word in a card's **Hanzi** field and fills the rest: a **cover** image of the characters, **Pinyin** (for example `wǒ`) and the **HSK** level (for example `HSK-1`).
-- **`pick_random.py`** marks 10 random cards to review: 5 **Difícil**, 3 **Médio** and 2 **Fácil**.
+- **`fill_card.py`** pega a palavra do campo **Hanzi** de um card e preenche o resto: uma **capa** com os caracteres, o **Pinyin** (por exemplo `wǒ`) e o nível **HSK** (por exemplo `HSK-1`).
+- **`pick_random.py`** marca 10 cards aleatórios para revisar: 5 **Difícil**, 3 **Médio** e 2 **Fácil**.
 
-You can run both yourself from your computer, with no server and no webhooks. If you want them to run on their own from Notion, see [Automate it with Notion webhooks](#automate-it-with-notion-webhooks) after that.
+Você pode rodar os dois no seu computador, sem servidor e sem webhooks. Se quiser que rodem sozinhos a partir do Notion, veja [Automatizar com webhooks do Notion](#automatizar-com-webhooks-do-notion) logo depois.
 
-![Example cover](example_cover.png)
+![Exemplo de capa](example_cover.png)
 
-## Run the scripts yourself
+## Rodar os scripts no seu computador
 
-### One-time setup
-1. **Create a Notion integration.** Go to https://www.notion.so/profile/integrations, create an internal integration and copy its secret (it starts with `ntn_`).
-2. **Give it your database.** Open the flashcards database in Notion, click **•••** › **Connections**, and add your integration.
-3. **Copy the database id.** It's the 32 characters in the database link, before `?v=`: `notion.so/`**`1a2b3c...`**`?v=...`
-4. **Install Python 3 and the requirements**, from this folder:
+### Configuração (só uma vez)
+1. **Crie uma integração do Notion.** Acesse https://www.notion.so/profile/integrations, crie uma integração interna e copie o segredo dela (começa com `ntn_`).
+2. **Dê acesso ao seu banco de dados.** Abra o banco de flashcards no Notion, clique em **•••** › **Conexões** e adicione a sua integração.
+3. **Copie o id do banco de dados.** São os 32 caracteres do link do banco, antes de `?v=`: `notion.so/`**`1a2b3c...`**`?v=...`
+4. **Instale o Python 3 e as dependências**, a partir desta pasta:
    ```
    pip install -r requirements.txt
    ```
-5. **Set your secret and database id** in the terminal you'll run the scripts from:
+5. **Defina o segredo e o id do banco** no terminal onde você vai rodar os scripts:
    ```
    export NOTION_TOKEN=ntn_...
    export NOTION_DATABASE_ID=1a2b3c...
    ```
-   On Windows PowerShell, use `$env:NOTION_TOKEN="ntn_..."` instead.
+   No PowerShell do Windows, use `$env:NOTION_TOKEN="ntn_..."`.
 
-Your database needs a **Hanzi** title or text field. **Pinyin** (text) and **HSK** (select, text or number) are filled if they exist. To use other column names, change the settings at the top of `hanzi_covers.py`.
+O banco precisa de um campo **Hanzi** (título ou texto). **Pinyin** (texto) e **HSK** (seleção, texto ou número) são preenchidos se existirem. Para usar outros nomes de coluna, mude as configurações no topo de `hanzi_covers.py`.
 
-### Fill cards: `fill_card.py`
+### Preencher cards: `fill_card.py`
 ```
-python3 fill_card.py --all            # every card: fill Pinyin and HSK, add missing covers
-python3 fill_card.py --all --force    # the same, and redraw every cover
+python3 fill_card.py --all            # todos os cards: preenche Pinyin e HSK, cria as capas que faltam
+python3 fill_card.py --all --force    # o mesmo, e redesenha todas as capas
 ```
-The first run downloads the font (26 MB) and the HSK word list once.
+A primeira execução baixa a fonte (26 MB) e a lista de palavras do HSK, uma vez só.
 
-To fill only some cards, pass their links instead of `--all`. This always redraws their covers.
-1. In Notion, open the card, click **•••** at the top right, and choose **Copy link**.
-2. Paste the link after the script name, **inside quotes**:
+Para preencher só alguns cards, passe os links deles no lugar de `--all`. Assim as capas são sempre redesenhadas.
+1. No Notion, abra o card, clique em **•••** no canto superior direito e escolha **Copiar link**.
+2. Cole o link depois do nome do script, **entre aspas**:
    ```
    python3 fill_card.py "https://www.notion.so/me/学习-1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d?pvs=4"
    ```
-   The quotes matter: without them, the `?` in the link makes the macOS terminal answer `no matches found`.
-3. For several cards, add more links separated by spaces. The 32-character id at the end of the link also works on its own.
+   As aspas são importantes: sem elas, o `?` do link faz o terminal do macOS responder `no matches found`.
+3. Para vários cards, coloque mais links separados por espaço. O id de 32 caracteres no fim do link também funciona sozinho.
 
-### Pick cards to review: `pick_random.py`
+### Escolher cards para revisar: `pick_random.py`
 ```
-python3 pick_random.py --reset    # uncheck the last set, then check 10 new cards
-python3 pick_random.py            # check 10 more, keeping the ones already checked
+python3 pick_random.py --reset    # desmarca o grupo anterior e marca 10 cards novos
+python3 pick_random.py            # marca mais 10, mantendo os que já estão marcados
 ```
-It sets the **Revisar** checkbox on 5 **Difícil**, 3 **Médio** and 2 **Fácil** cards, by the **Status** property. Cards that are already checked, or have any other status, are never picked.
+O script marca a caixa **Revisar** em 5 cards **Difícil**, 3 **Médio** e 2 **Fácil**, de acordo com a propriedade **Status**. Cards já marcados, ou com outro status, nunca são escolhidos.
 
-If a status doesn't have enough cards, the next harder status completes it, then the next easier one. For example, with only 4 Difícil cards you get 4 Difícil + 4 Médio + 2 Fácil.
+Se um status não tiver cards suficientes, o próximo status mais difícil completa, depois o próximo mais fácil. Por exemplo, com só 4 cards Difícil você recebe 4 Difícil + 4 Médio + 2 Fácil.
 
-| Option | Default | What it does |
+| Opção | Padrão | O que faz |
 |---|---|---|
-| `--prop` | `Revisar` | The property to set. Works with checkbox, select, status, multi-select, text, number and date properties. |
-| `--value` | checked / today | What to set it to. |
-| `--by` | `Status` | The difficulty property (status or select). |
-| `--mix` | `Difícil:5,Médio:3,Fácil:2` | How many cards of each, hardest first. |
-| `--n` | | `--n 10` picks 10 random cards and ignores difficulty. |
-| `--reset` | | First clear the property on every card. Status properties can't be cleared. |
-| `--db` | `NOTION_DATABASE_ID` | The database id. |
+| `--prop` | `Revisar` | A propriedade a marcar. Funciona com caixa de seleção, seleção, status, seleção múltipla, texto, número e data. |
+| `--value` | marcado / hoje | O valor a definir. |
+| `--by` | `Status` | A propriedade de dificuldade (status ou seleção). |
+| `--mix` | `Difícil:5,Médio:3,Fácil:2` | Quantos cards de cada, do mais difícil para o mais fácil. |
+| `--n` | | `--n 10` escolhe 10 cards aleatórios e ignora a dificuldade. |
+| `--reset` | | Primeiro limpa a propriedade em todos os cards. Propriedades de status não podem ser limpas. |
+| `--db` | `NOTION_DATABASE_ID` | O id do banco de dados. |
 
-### Preview a cover
+### Ver uma capa antes
 ```
 python3 hanzi_covers.py --preview 你好
 ```
-This writes `preview.png` without touching Notion.
+Isso gera `preview.png` sem mexer no Notion.
 
-## Automate it with Notion webhooks
-Notion can call the same scripts for you: an automation fills each new card, and a button picks the review set. For that, `server.py` has to run somewhere Notion can reach. These steps use [Render](https://render.com)'s free plan.
+## Automatizar com webhooks do Notion
+O Notion pode chamar esses mesmos scripts por você: uma automação preenche cada card novo, e um botão escolhe os cards para revisar. Para isso, o `server.py` precisa rodar num lugar que o Notion alcance. Estes passos usam o plano gratuito do [Render](https://render.com).
 
-### 1. Host the server
-1. Push this folder to a GitHub repository.
-2. On Render, create a **Web Service** from that repository, with start command `python3 server.py`. It redeploys on every push.
-3. Under **Environment**, add:
-   - `NOTION_TOKEN`: your integration secret
-   - `WEBHOOK_KEY`: any long random word you choose. It keeps strangers from using your server.
-   - `NOTION_DATABASE_ID`: optional, the flashcards database id
+### 1. Hospedar o servidor
+1. Envie esta pasta para um repositório no GitHub.
+2. No Render, crie um **Web Service** a partir desse repositório, com o comando de início `python3 server.py`. Ele publica de novo a cada push.
+3. Em **Environment**, adicione:
+   - `NOTION_TOKEN`: o segredo da sua integração
+   - `WEBHOOK_KEY`: qualquer palavra longa e aleatória que você escolher. Ela impede que estranhos usem o seu servidor.
+   - `NOTION_DATABASE_ID`: opcional, o id do banco de flashcards
 
-The webhook URLs below use `https://YOUR-APP.onrender.com`; replace it with your Render address and `YOUR_WEBHOOK_KEY` with your key.
+Os links de webhook abaixo usam `https://SEU-APP.onrender.com`; troque pelo endereço do seu Render, e `SUA_WEBHOOK_KEY` pela sua chave.
 
-### 2. Fill new cards automatically
-In the flashcards database, click **⚡** (Automations) › **New automation**:
-- **Trigger:** *Page added*, and also *Hanzi edited* so Pinyin, HSK and the cover follow changes.
-- **Action:** *Send webhook* to `https://YOUR-APP.onrender.com/?key=YOUR_WEBHOOK_KEY`
+### 2. Preencher cards novos automaticamente
+No banco de flashcards, clique em **⚡** (Automações) › **Nova automação**:
+- **Gatilho:** *Página adicionada*, e também *Hanzi editado*, para que Pinyin, HSK e capa acompanhem as mudanças.
+- **Ação:** *Enviar webhook* para `https://SEU-APP.onrender.com/?key=SUA_WEBHOOK_KEY`
 
-This runs `fill_card.py` on the card. A manual fix to Pinyin stays until you edit that card's Hanzi again.
+Isso roda o `fill_card.py` no card. Uma correção manual no Pinyin fica até você editar o Hanzi daquele card de novo.
 
-### 3. Review button
-Add a **Button** anywhere in Notion, inside the database or on another page, with the action *Send webhook* to:
+### 3. Botão de revisão
+Adicione um **Botão** em qualquer lugar do Notion, dentro do banco ou em outra página, com a ação *Enviar webhook* para:
 ```
-https://YOUR-APP.onrender.com/random?key=YOUR_WEBHOOK_KEY&reset=1
+https://SEU-APP.onrender.com/random?key=SUA_WEBHOOK_KEY&reset=1
 ```
-This runs `pick_random.py --reset`. The URL takes the same options without the dashes, for example `&n=10` or `&mix=Difícil:6,Médio:4`. If the button isn't inside the database, the server uses `NOTION_DATABASE_ID`, or else finds the database shared with your integration that has a **Revisar** property.
+Isso roda `pick_random.py --reset`. O link aceita as mesmas opções sem os traços, por exemplo `&n=10` ou `&mix=Difícil:6,Médio:4`. Se o botão não estiver dentro do banco, o servidor usa `NOTION_DATABASE_ID`, ou então procura o banco compartilhado com a sua integração que tem a propriedade **Revisar**.
 
-If a webhook does nothing, check **Logs** on Render. A filled card shows `✓ 我 wǒ | HSK-1`, and a review pick shows `✓ random: Revisar=true on 10 cards ...`.
+Se um webhook não fizer nada, veja os **Logs** no Render. Um card preenchido aparece como `✓ 我 wǒ | HSK-1`, e uma escolha de revisão como `✓ revisão: Revisar=true em 10 cards ...`.
 
-## Settings (top of `hanzi_covers.py`)
-| Setting | Default | What it does |
+## Configurações (topo de `hanzi_covers.py`)
+| Configuração | Padrão | O que faz |
 |---|---|---|
-| `HANZI_PROP`, `PINYIN_PROP`, `HSK_PROP` | `Hanzi`, `Pinyin`, `HSK` | Your column names. |
-| `HSK_VERSION` | `"n"` (HSK 3.0, levels 1–7) | Use `"o"` for HSK 2.0 (levels 1–6). |
-| `FILL_ONLY_EMPTY` | `False` | Set to `True` to never overwrite Pinyin or HSK once filled. |
-| `SHOW_PINYIN` | `False` | Print pinyin on the cover. |
+| `HANZI_PROP`, `PINYIN_PROP`, `HSK_PROP` | `Hanzi`, `Pinyin`, `HSK` | Os nomes das suas colunas. |
+| `HSK_VERSION` | `"n"` (HSK 3.0, níveis 1–7) | Use `"o"` para o HSK 2.0 (níveis 1–6). |
+| `FILL_ONLY_EMPTY` | `False` | Use `True` para nunca sobrescrever Pinyin ou HSK já preenchidos. |
+| `SHOW_PINYIN` | `False` | Mostra o pinyin na capa. |
 
-## Where the data comes from
-- **Pinyin:** [pypinyin](https://github.com/mozillazg/python-pinyin) (MIT licence), which reads whole words so each character gets the right tone in context (晚上好 → wǎn shàng hǎo).
-- **HSK level:** the [Complete HSK Vocabulary](https://github.com/drkameleon/complete-hsk-vocabulary) list (MIT licence, about 11,000 words), downloaded once as `hsk.json`. Words not in the list get no HSK level.
-- **Cover font:** [LXGW WenKai GB](https://github.com/lxgw/LxgwWenKaiGB) (SIL Open Font License), so the covers are free to share.
+## De onde vêm os dados
+- **Pinyin:** [pypinyin](https://github.com/mozillazg/python-pinyin) (licença MIT), que lê a palavra inteira para dar o tom certo a cada caractere no contexto (晚上好 → wǎn shàng hǎo).
+- **Nível HSK:** a lista [Complete HSK Vocabulary](https://github.com/drkameleon/complete-hsk-vocabulary) (licença MIT, cerca de 11.000 palavras), baixada uma vez como `hsk.json`. Palavras fora da lista ficam sem nível HSK.
+- **Fonte da capa:** [LXGW WenKai GB](https://github.com/lxgw/LxgwWenKaiGB) (SIL Open Font License), então as capas podem ser compartilhadas livremente.
 
-## Known limits
-- **Pinyin is lowercase with one syllable per character,** for example *zhōng guó*. Proper nouns aren't capitalised.
-- **The first webhook after a pause can be slow.** Render's free plan sleeps after about 15 minutes without use and takes up to a minute to wake.
+## Limitações conhecidas
+- **O pinyin fica em minúsculas, com uma sílaba por caractere,** por exemplo *zhōng guó*. Nomes próprios não ganham maiúscula.
+- **O primeiro webhook depois de uma pausa pode demorar.** O plano gratuito do Render dorme depois de uns 15 minutos sem uso e leva até um minuto para acordar.
