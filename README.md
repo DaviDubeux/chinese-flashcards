@@ -114,3 +114,6 @@ Se um webhook não fizer nada, veja os **Logs** no Render. Um card preenchido ap
 ## Limitações conhecidas
 - **O pinyin fica em minúsculas, com uma sílaba por caractere,** por exemplo *zhōng guó*. Nomes próprios não ganham maiúscula.
 - **O primeiro webhook depois de uma pausa pode demorar.** O plano gratuito do Render dorme depois de uns 15 minutos sem uso e leva até um minuto para acordar.
+
+## Licença
+Código sob a [licença MIT](LICENSE): você pode usar, modificar e compartilhar à vontade, mantendo o aviso de copyright.
