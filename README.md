@@ -75,7 +75,7 @@ O Notion pode chamar esses mesmos scripts por você: uma automação preenche ca
 ### 1. Hospedar o servidor
 1. Envie esta pasta para um repositório no GitHub.
 2. No Render, crie um **Web Service** a partir desse repositório, com o comando de início `python3 server.py`. Ele publica de novo a cada push.
-3. Em **Environment**, adicione:
+3. Em **Environment** no Render, adicione:
    - `NOTION_TOKEN`: o segredo da sua integração
    - `WEBHOOK_KEY`: qualquer palavra longa e aleatória que você escolher. Ela impede que estranhos usem o seu servidor.
    - `NOTION_DATABASE_ID`: opcional, o id do banco de flashcards
@@ -84,7 +84,7 @@ Os links de webhook abaixo usam `https://SEU-APP.onrender.com`; troque pelo ende
 
 ### 2. Preencher cards novos automaticamente
 No banco de flashcards, clique em **⚡** (Automações) › **Nova automação**:
-- **Gatilho:** *Página adicionada*, e também *Hanzi editado*, para que Pinyin, HSK e capa acompanhem as mudanças.
+- **Gatilho:** *Página adicionada* ou *Hanzi editado*, para que Pinyin, HSK e capa acompanhem as mudanças.
 - **Ação:** *Enviar webhook* para `https://SEU-APP.onrender.com/?key=SUA_WEBHOOK_KEY`
 
 Isso roda o `fill_card.py` no card. Uma correção manual no Pinyin fica até você editar o Hanzi daquele card de novo.
