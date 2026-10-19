@@ -1,17 +1,10 @@
 #!/usr/bin/env python3
-"""Fill each Notion flashcard from its Hanzi field: page cover, Pinyin and HSK level.
+"""Shared code: draws the Hanzi cover images and talks to Notion.
 
 Pinyin comes from pypinyin, the HSK level from the HSK word list (downloaded once).
-Fields you already filled are left alone.
-
-Setup:
-  1. Create an integration at https://www.notion.so/profile/integrations and copy its token.
-  2. Open your flashcard database in Notion > ••• > Connections > add the integration.
-  3. pip install -r requirements.txt
-  4. export NOTION_TOKEN=secret_...   NOTION_DATABASE_ID=<32-char id from the database URL>
-  5. python3 hanzi_covers.py            # fill empty fields, add missing covers
-     python3 hanzi_covers.py --force    # also redo every cover
-     python3 hanzi_covers.py --preview 你好   # just write preview.png, no Notion calls
+You don't run this file to update cards; use fill_card.py and pick_random.py.
+To check how a cover looks, without any Notion calls:
+  python3 hanzi_covers.py --preview 你好   # writes preview.png
 
 Property names are set below (HANZI_PROP, PINYIN_PROP). Pinyin is optional.
 The font is LXGW WenKai GB, a textbook-style Kai (SIL Open Font License), so the images are free to share.
@@ -201,34 +194,11 @@ class Notion:
 
 def main():
     args = sys.argv[1:]
-    if args[:1] == ["--preview"]:
-        open("preview.png", "wb").write(render(args[1], args[2] if len(args) > 2 else ""))
-        print("Wrote preview.png")
-        return
-    force = "--force" in args
-    nt = Notion(os.environ["NOTION_TOKEN"])
-    done = skipped = 0
-    for i, page in enumerate(nt.pages(os.environ["NOTION_DATABASE_ID"])):
-        props = page["properties"]
-        if i == 0:
-            print("Properties found:", ", ".join(f"{k} ({v['type']})" for k, v in props.items()))
-            if HANZI_PROP not in props:
-                sys.exit(f"No property named '{HANZI_PROP}'. Change HANZI_PROP at the top of the script.")
-        hanzi = plain(props.get(HANZI_PROP))
-        if not hanzi:
-            skipped += 1
-            continue
-        filled = nt.fill_fields(page)
-        cover_col = props.get(COVER_PROP, {})
-        has_cover = page.get("cover") and (cover_col.get("type") != "files" or cover_col["files"])
-        if not has_cover or force:
-            nt.cover_page(page)
-        if filled or not has_cover or force:
-            done += 1
-            print(f"✓ {hanzi} " + " | ".join(filled.values()))
-        else:
-            skipped += 1
-    print(f"Done: {done} cards updated, {skipped} already complete.")
+    if args[:1] != ["--preview"] or len(args) < 2:
+        sys.exit("Usage: python3 hanzi_covers.py --preview 你好 [pinyin]\n"
+                 "To update cards, use fill_card.py or pick_random.py.")
+    open("preview.png", "wb").write(render(args[1], args[2] if len(args) > 2 else ""))
+    print("Wrote preview.png")
 
 
 if __name__ == "__main__":
