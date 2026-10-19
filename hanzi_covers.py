@@ -14,7 +14,7 @@ Setup:
      python3 hanzi_covers.py --preview 你好   # just write preview.png, no Notion calls
 
 Property names are set below (HANZI_PROP, PINYIN_PROP). Pinyin is optional.
-The font is Noto Serif SC (SIL Open Font License), so the images are free to share.
+The font is LXGW WenKai GB, a textbook-style Kai (SIL Open Font License), so the images are free to share.
 """
 import io, json, os, re, sys, time
 import requests
@@ -31,8 +31,8 @@ FILL_ONLY_EMPTY = False  # False: Pinyin/HSK follow the Hanzi each time the auto
 WIDTH, HEIGHT = 1500, 600  # Notion's cover size (shown center-cropped)
 BG, FG, SUB = "#FBF7EF", "#B22222", "#555555"
 
-FONT_URL = "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Serif/SubsetOTF/SC/NotoSerifSC-Bold.otf"
-FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "NotoSerifSC-Bold.otf")
+FONT_URL = "https://raw.githubusercontent.com/lxgw/LxgwWenKaiGB/main/fonts/TTF/LXGWWenKaiGB-Medium.ttf"
+FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "LXGWWenKaiGB-Medium.ttf")
 API = "https://api.notion.com/v1"
 # HSK word list (MIT licence): github.com/drkameleon/complete-hsk-vocabulary
 HSK_URL = "https://raw.githubusercontent.com/drkameleon/complete-hsk-vocabulary/main/complete.min.json"
@@ -42,7 +42,7 @@ _hsk = None
 
 def font(size):
     if not os.path.exists(FONT_PATH):
-        print("Downloading Noto Serif SC font...")
+        print("Downloading LXGW WenKai GB font...")
         # requests ships its own certificates (certifi), unlike urllib on some Macs.
         r = requests.get(FONT_URL, timeout=120)
         r.raise_for_status()
