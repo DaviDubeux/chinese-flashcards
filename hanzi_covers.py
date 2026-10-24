@@ -160,13 +160,15 @@ class Notion:
         self.set_cover(page, render(hanzi, pinyin), f"{hanzi}.png")
         return hanzi
 
-    def fill_fields(self, page):
-        """Fill Pinyin and HSK level. Returns what was written."""
+    def fill_fields(self, page, only_empty=None):
+        """Fill Pinyin and HSK level. Returns what was written.
+        only_empty: True keeps fields that are already filled (default FILL_ONLY_EMPTY)."""
+        only_empty = FILL_ONLY_EMPTY if only_empty is None else only_empty
         props = page["properties"]
         hanzi = plain(props.get(HANZI_PROP))
         targets = {"pinyin": PINYIN_PROP, "hsk": HSK_PROP}
         todo = {k: n for k, n in targets.items()
-                if n in props and (not FILL_ONLY_EMPTY or is_empty(props[n]))}
+                if n in props and (not only_empty or is_empty(props[n]))}
         if not hanzi or not todo:
             return {}
         info = lookup(hanzi)

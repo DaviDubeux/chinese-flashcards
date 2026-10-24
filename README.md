@@ -30,8 +30,8 @@ O banco precisa de um campo **Hanzi** (título ou texto). **Pinyin** (texto) e *
 
 ### Preencher cards: `fill_card.py`
 ```
-python3 fill_card.py --all            # todos os cards: preenche Pinyin e HSK, cria as capas que faltam
-python3 fill_card.py --all --force    # o mesmo, e redesenha todas as capas
+python3 fill_card.py --all            # todos os cards: preenche Pinyin e HSK vazios, cria as capas que faltam
+python3 fill_card.py --all --force    # refaz Pinyin, HSK e todas as capas, mesmo os já preenchidos
 ```
 A primeira execução baixa a fonte (26 MB) e a lista de palavras do HSK, uma vez só.
 

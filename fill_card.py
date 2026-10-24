@@ -3,8 +3,8 @@
 
 É o que o webhook de card novo roda, e você pode rodar por conta própria:
   python3 fill_card.py "<link do card>" [...]   # preenche esses cards e redesenha as capas
-  python3 fill_card.py --all                    # todos os cards: preenche campos, cria capas que faltam
-  python3 fill_card.py --all --force            # todos os cards, redesenhando todas as capas
+  python3 fill_card.py --all                    # todos os cards: preenche campos vazios, cria capas que faltam
+  python3 fill_card.py --all --force            # todos os cards, refazendo Pinyin, HSK e todas as capas
 
 Coloque o link entre aspas (no Notion: ••• › Copiar link). O id de 32 caracteres também funciona.
 
@@ -25,13 +25,13 @@ def page_id(link):
     return ids[-1]
 
 
-def fill_card(nt, page, cover=True):
+def fill_card(nt, page, cover=True, only_empty=None):
     """Fill Pinyin and HSK, and draw the cover if cover is True.
     Returns (hanzi, what was filled), or (None, {}) when the Hanzi field is empty."""
     hanzi = plain(page["properties"].get(HANZI_PROP))
     if not hanzi:
         return None, {}
-    filled = nt.fill_fields(page)
+    filled = nt.fill_fields(page, only_empty)
     if cover:
         nt.cover_page(page)
     return hanzi, filled
@@ -51,7 +51,8 @@ def fill_all(nt, db, force=False):
                 sys.exit(f"Nenhuma propriedade chamada '{HANZI_PROP}'. Mude HANZI_PROP no topo de hanzi_covers.py.")
         cover_col = props.get(COVER_PROP, {})
         has_cover = page.get("cover") and (cover_col.get("type") != "files" or cover_col["files"])
-        hanzi, filled = fill_card(nt, page, cover=force or not has_cover)
+        # Without --force, keep Pinyin and HSK you already filled (or fixed by hand).
+        hanzi, filled = fill_card(nt, page, cover=force or not has_cover, only_empty=not force)
         if hanzi and (filled or not has_cover or force):
             done += 1
             print(log_line(page, hanzi, filled))
